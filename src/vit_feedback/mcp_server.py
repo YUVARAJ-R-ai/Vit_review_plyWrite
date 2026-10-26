@@ -47,6 +47,17 @@ def vit_analyze_feedback(username: str, password: str) -> Dict[str, Any]:
         client = get_client(username, password)
         page = client.get_page()
 
+        if client.all_already_posted:
+            return {
+                "status": "success",
+                "username": username,
+                "message": "All feedback for this semester has already been submitted and posted to VTOP.",
+                "pending_count": 0,
+                "all_already_posted": True,
+                "class_wise_courses": [],
+                "course_outcome_courses": []
+            }
+
         class_items, co_items = extract_dashboard_courses(page)
 
         pending_class = [it for it in class_items if it.is_pending]
@@ -58,6 +69,7 @@ def vit_analyze_feedback(username: str, password: str) -> Dict[str, Any]:
             "total_courses": len(class_items) + len(co_items),
             "pending_count": len(pending_class) + len(pending_co),
             "posted_count": (len(class_items) - len(pending_class)) + (len(co_items) - len(pending_co)),
+            "all_already_posted": False,
             "class_wise_courses": [it.model_dump() for it in class_items],
             "course_outcome_courses": [it.model_dump() for it in co_items],
         }
@@ -89,6 +101,15 @@ def vit_submit_all_feedback(
     try:
         client = get_client(username, password)
         page = client.get_page()
+
+        if client.all_already_posted:
+            return {
+                "status": "success",
+                "message": "All feedback for this semester has already been submitted and posted to VTOP.",
+                "processed_courses": [],
+                "failed_courses": [],
+                "dry_run": dry_run
+            }
 
         policy = RatingPolicy(
             default_rating=default_rating,
@@ -133,6 +154,14 @@ def vit_submit_single_course(
     try:
         client = get_client(username, password)
         page = client.get_page()
+
+        if client.all_already_posted:
+            return {
+                "status": "success",
+                "message": "All feedback for this semester has already been submitted and posted to VTOP.",
+                "processed": [],
+                "dry_run": dry_run
+            }
 
         class_items, co_items = extract_dashboard_courses(page)
         policy = RatingPolicy(

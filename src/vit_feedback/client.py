@@ -38,6 +38,7 @@ class VitFeedbackClient:
         self._context: Optional[BrowserContext] = None
         self._page: Optional[Page] = None
         self._is_logged_in: bool = False
+        self.all_already_posted: bool = False
 
     def is_logged_in(self) -> bool:
         return self._is_logged_in
@@ -108,20 +109,57 @@ class VitFeedbackClient:
         captcha_src = page.evaluate("document.getElementById('captcha_id').src")
         return solve_captcha_base64(captcha_src)
 
+    def _refresh_and_wait_new_captcha(self) -> str:
+        """Trigger captcha refresh via AJAX and wait for the new image and unblockUI."""
+        page = self.get_page()
+        try:
+            new_src = page.evaluate("""() => {
+                return new Promise((resolve) => {
+                    const oldSrc = document.getElementById('captcha_id') ? document.getElementById('captcha_id').src : '';
+                    if (typeof doRefreshCaptcha === 'function') {
+                        doRefreshCaptcha();
+                    }
+                    const interval = setInterval(() => {
+                        const img = document.getElementById('captcha_id');
+                        const unblocked = document.querySelector('.blockUI') === null;
+                        if (img && img.src && img.src !== oldSrc && unblocked) {
+                            clearInterval(interval);
+                            resolve(img.src);
+                        }
+                    }, 200);
+                    setTimeout(() => {
+                        clearInterval(interval);
+                        resolve(document.getElementById('captcha_id') ? document.getElementById('captcha_id').src : '');
+                    }, 8000);
+                });
+            }""")
+            return new_src or ""
+        except Exception as e:
+            logger.warning("Error refreshing captcha: %s", e)
+            return ""
+
     def _dismiss_sweetalert_if_any(self) -> Optional[str]:
         """Dismiss swal popup if present and return the title text."""
         page = self.get_page()
-        swal_title = page.query_selector(".sweet-alert h2")
-        if swal_title and swal_title.is_visible():
-            title_text = swal_title.inner_text().strip()
-            ok_btn = page.query_selector(".sweet-alert button.confirm")
-            if ok_btn and ok_btn.is_visible():
-                ok_btn.click()
+        try:
+            title = page.evaluate("""() => {
+                const h2 = document.querySelector('.sweet-alert h2');
+                if (h2 && h2.offsetParent !== null) {
+                    const text = h2.innerText;
+                    const okBtn = document.querySelector('.sweet-alert button.confirm');
+                    if (okBtn) okBtn.click();
+                    return text;
+                }
+                return null;
+            }""")
+            if title:
                 time.sleep(0.5)
-            return title_text
+                return title
+        except Exception:
+            pass
         return None
 
-    def login(self, username: str, password: str, max_retries: int = 4) -> bool:
+    def login(self, username: str, password: str, max_retries: int = 8) -> bool:
         """Log in with username and password, automatically solving the captcha."""
         self.navigate_to_login()
         page = self.get_page()
@@ -138,22 +176,35 @@ class VitFeedbackClient:
 
             # Solve captcha
             captcha_val = self._extract_and_solve_captcha()
-            logger.info("Solved captcha: %s", captcha_val)
+            
+            # Refresh if OCR didn't yield exactly 6 characters
+            refreshes = 0
+            while len(captcha_val) != 6 and refreshes < 4:
+                logger.info("Captcha '%s' length is %d (needs 6). Refreshing...", captcha_val, len(captcha_val))
+                self._refresh_and_wait_new_captcha()
+                captcha_val = self._extract_and_solve_captcha()
+                refreshes += 1
+
+            logger.info("Submitting with captcha: %s", captcha_val)
             page.fill("#captchaString", captcha_val)
 
             # Click login button
             page.click('button[type="submit"]')
-            time.sleep(1.5)
+            time.sleep(2.0)
 
             # Check if sweetalert popped up
             alert_text = self._dismiss_sweetalert_if_any()
             if alert_text:
                 logger.warning("SweetAlert dialog appeared: '%s'", alert_text)
-                if "Invalid Captcha" in alert_text or "Enter Captcha" in alert_text or "Not valid" in alert_text:
-                    # Refresh captcha and retry
+                if "already posted" in alert_text.lower():
+                    logger.info("All feedback for this semester has already been completed!")
+                    self._is_logged_in = True
+                    self.all_already_posted = True
+                    return True
+                elif "Invalid Captcha" in alert_text or "Enter Captcha" in alert_text or "Not valid" in alert_text:
                     logger.info("Refreshing captcha for next attempt...")
-                    page.evaluate("if (typeof doRefreshCaptcha === 'function') doRefreshCaptcha();")
-                    time.sleep(1)
+                    self._refresh_and_wait_new_captcha()
+                    time.sleep(0.5)
                     continue
                 elif "Invalid" in alert_text and ("User" in alert_text or "Password" in alert_text):
                     raise ValueError(f"Portal rejected credentials: {alert_text}")
@@ -165,7 +216,6 @@ class VitFeedbackClient:
                 self._is_logged_in = True
                 return True
 
-            # Alternatively check if feedback table is present
             if page.query_selector("text='FEEDBACK - CLASS WISE'"):
                 logger.info("Login successful (detected feedback table)!")
                 self._is_logged_in = True

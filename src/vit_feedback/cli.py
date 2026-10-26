@@ -52,7 +52,6 @@ def run_cli(args_list: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(args_list)
 
-    # Configure logging
     log_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(level=log_level, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -68,7 +67,6 @@ def run_cli(args_list: Optional[List[str]] = None) -> int:
         print("Error: Username and password are required.", file=sys.stderr)
         return 1
 
-    # Parse overrides
     overrides = {}
     for ov in args.override:
         if "=" in ov:
@@ -90,6 +88,10 @@ def run_cli(args_list: Optional[List[str]] = None) -> int:
         print(f"Connecting to VIT Feedback portal for user {username}...")
         client.login(username, password)
         page = client.get_page()
+
+        if client.all_already_posted:
+            print("\n✓ Notice: All feedback for this semester has already been submitted and posted to VTOP!")
+            return 0
 
         class_items, co_items = extract_dashboard_courses(page)
         print_table("FEEDBACK - CLASS WISE", class_items)

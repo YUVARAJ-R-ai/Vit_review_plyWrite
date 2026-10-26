@@ -21,6 +21,7 @@ def test_mcp_instance_registered():
 
 def test_vit_analyze_feedback_mock(monkeypatch):
     mock_client = MagicMock()
+    mock_client.all_already_posted = False
     mock_client.login.return_value = True
     mock_client.get_page.return_value = MagicMock()
 
@@ -41,6 +42,7 @@ def test_vit_analyze_feedback_mock(monkeypatch):
 
 def test_vit_submit_all_feedback_mock(monkeypatch):
     mock_client = MagicMock()
+    mock_client.all_already_posted = False
     mock_client.login.return_value = True
     mock_client.get_page.return_value = MagicMock()
 
@@ -53,3 +55,13 @@ def test_vit_submit_all_feedback_mock(monkeypatch):
     res = vit_submit_all_feedback("u", "p", default_rating=5, dry_run=True)
     assert res["status"] == "success"
     assert "BCSE204P" in res["processed_courses"]
+
+def test_vit_already_posted_short_circuit(monkeypatch):
+    mock_client = MagicMock()
+    mock_client.all_already_posted = True
+    mock_client.login.return_value = True
+    monkeypatch.setattr("vit_feedback.mcp_server.get_client", lambda u, p: mock_client)
+
+    res = vit_analyze_feedback("u", "p")
+    assert res["all_already_posted"] is True
+    assert res["pending_count"] == 0
