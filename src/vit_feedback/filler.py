@@ -50,50 +50,50 @@ def fill_class_wise_feedback(page: Page, item: CourseItem, policy: RatingPolicy,
     logger.info("Filling Class-Wise feedback for %s (%s) - %s", item.course_code, item.class_nbr, item.faculty_name)
 
     # 1. Trigger open form via JS AJAX
-    open_script = f"""() => {{
-        if (typeof processCourseFeedbackPerception === 'function') {{
-            processCourseFeedbackPerception('{item.course_id}', '{item.param_type}');
+    open_script = """([courseId, paramType]) => {
+        if (typeof processCourseFeedbackPerception === 'function') {
+            processCourseFeedbackPerception(courseId, paramType);
             return true;
-        }}
+        }
         return false;
-    }}"""
-    res = page.evaluate(open_script)
+    }"""
+    res = page.evaluate(open_script, [item.course_id, item.param_type])
     if not res:
         logger.error("processCourseFeedbackPerception function not found on page.")
         return False
     wait_for_ajax(page)
 
     # 2. Determine rating & suggestions
-    rating = policy.get_rating_for(item.course_code or item.class_nbr)
-    suggestions = policy.get_suggestions_for(item.course_code or item.class_nbr)
+    rating = policy.get_rating_for(item.course_code, item.class_nbr, item.faculty_name)
+    suggestions = policy.get_suggestions_for(item.course_code, item.class_nbr, item.faculty_name)
 
     logger.info("Applying %d-star rating and suggestions to %s", rating, item.course_code)
 
     # 3. Fill radios and textarea
-    fill_script = f"""() => {{
+    fill_script = """([targetRating, targetSuggestions]) => {
         const form = document.getElementById('CourseFeedbackPerception');
         if (!form) return false;
 
         // Select all question radios for target rating
         const fieldsets = Array.from(form.querySelectorAll('fieldset.rating'));
-        for (const fs of fieldsets) {{
-            const radio = fs.querySelector('input[type="radio"][value="{rating}"]');
-            if (radio) {{
+        for (const fs of fieldsets) {
+            const radio = fs.querySelector(`input[type="radio"][value="${targetRating}"]`);
+            if (radio) {
                 radio.checked = true;
-                radio.dispatchEvent(new Event('change', {{ bubbles: true }}));
-            }}
-        }}
+                radio.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        }
 
-        // Fill suggestions textarea
+        // Fill suggestions textarea safely
         const ta = form.querySelector('textarea#FBS01') || form.querySelector('textarea');
-        if (ta) {{
-            ta.value = "{suggestions}";
-            ta.dispatchEvent(new Event('input', {{ bubbles: true }}));
-        }}
+        if (ta) {
+            ta.value = targetSuggestions;
+            ta.dispatchEvent(new Event('input', { bubbles: true }));
+        }
 
         return true;
-    }}"""
-    filled = page.evaluate(fill_script)
+    }"""
+    filled = page.evaluate(fill_script, [rating, suggestions])
     if not filled:
         logger.warning("Could not locate CourseFeedbackPerception form.")
         return False
@@ -120,40 +120,40 @@ def fill_course_outcome_feedback(page: Page, item: CourseItem, policy: RatingPol
     logger.info("Filling Course Outcome feedback for %s", item.course_code)
 
     # 1. Trigger open CO form via JS AJAX
-    open_script = f"""() => {{
-        if (typeof processCourseOutcomeFeedbackPerception === 'function') {{
-            processCourseOutcomeFeedbackPerception('{item.course_id}');
+    open_script = """(courseId) => {
+        if (typeof processCourseOutcomeFeedbackPerception === 'function') {
+            processCourseOutcomeFeedbackPerception(courseId);
             return true;
-        }}
+        }
         return false;
-    }}"""
-    res = page.evaluate(open_script)
+    }"""
+    res = page.evaluate(open_script, item.course_id)
     if not res:
         logger.error("processCourseOutcomeFeedbackPerception function not found on page.")
         return False
     wait_for_ajax(page)
 
     # 2. Determine rating
-    co_rating = policy.get_co_rating(item.course_code)
+    co_rating = policy.get_co_rating(item.course_code, item.class_nbr, item.faculty_name)
     logger.info("Applying %d-star rating to Course Outcomes for %s", co_rating, item.course_code)
 
     # 3. Fill radios
-    fill_script = f"""() => {{
+    fill_script = """(targetRating) => {
         const form = document.getElementById('CourseOutcomeFeedbackPerception');
         if (!form) return false;
 
         const fieldsets = Array.from(form.querySelectorAll('fieldset.rating'));
-        for (const fs of fieldsets) {{
-            const radio = fs.querySelector('input[type="radio"][value="{co_rating}"]');
-            if (radio) {{
+        for (const fs of fieldsets) {
+            const radio = fs.querySelector(`input[type="radio"][value="${targetRating}"]`);
+            if (radio) {
                 radio.checked = true;
-                radio.dispatchEvent(new Event('change', {{ bubbles: true }}));
-            }}
-        }}
+                radio.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        }
 
         return true;
-    }}"""
-    filled = page.evaluate(fill_script)
+    }"""
+    filled = page.evaluate(fill_script, co_rating)
     if not filled:
         logger.warning("Could not locate CourseOutcomeFeedbackPerception form.")
         return False

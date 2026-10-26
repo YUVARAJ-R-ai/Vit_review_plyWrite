@@ -48,6 +48,31 @@ def test_rating_policy_overrides():
     assert policy.get_co_rating() == 5
     assert policy.get_suggestions_for("BCSE301L") == "Needs better lab coordination."
 
+def test_rating_policy_empty_string_safety():
+    policy = RatingPolicy(
+        default_rating=5,
+        course_overrides={"BCSE204L": 4, "": 2},
+        custom_suggestions={"BCSE204L": "Great", "": "Empty"}
+    )
+    # Empty string should never match an override or empty key
+    assert policy.get_rating_for("") == 5
+    assert policy.get_co_rating("") == 5
+    assert policy.get_suggestions_for("") == policy.default_suggestion
+
+def test_rating_policy_multiple_identifiers():
+    policy = RatingPolicy(
+        default_rating=5,
+        course_overrides={"SAKTHIVEL": 4, "CH2026270100925": 3},
+        custom_suggestions={"SAKTHIVEL": "Great teacher."}
+    )
+    # Match via faculty name
+    assert policy.get_rating_for("UNKNOWN_COURSE", "", "SAKTHIVEL R") == 4
+    assert policy.get_suggestions_for("UNKNOWN_COURSE", "", "SAKTHIVEL R") == "Great teacher."
+    # Match via class number
+    assert policy.get_rating_for("UNKNOWN_COURSE", "CH2026270100925", "OTHER FACULTY") == 3
+    # No match falls back to default
+    assert policy.get_rating_for("UNKNOWN_COURSE", "CH9999", "OTHER FACULTY") == 5
+
 def test_feedback_result():
     res = FeedbackResult(
         status="success",

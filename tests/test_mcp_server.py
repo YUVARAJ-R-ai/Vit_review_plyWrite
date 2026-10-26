@@ -65,3 +65,49 @@ def test_vit_already_posted_short_circuit(monkeypatch):
     res = vit_analyze_feedback("u", "p")
     assert res["all_already_posted"] is True
     assert res["pending_count"] == 0
+
+def test_get_client_failure_cleans_up(monkeypatch):
+    import vit_feedback.mcp_server as mcp_module
+    mock_client = MagicMock()
+    mock_client.login.side_effect = ValueError("Invalid credentials")
+    monkeypatch.setattr(mcp_module, "VitFeedbackClient", lambda headless: mock_client)
+    mcp_module._global_client = None
+
+    with pytest.raises(ValueError, match="Invalid credentials"):
+        mcp_module.get_client("bad_user", "bad_pass")
+
+    mock_client.close.assert_called_once()
+    assert mcp_module._global_client is None
+
+def test_vit_submit_single_course_mock(monkeypatch):
+    mock_client = MagicMock()
+    mock_client.all_already_posted = False
+    mock_client.login.return_value = True
+    mock_client.get_page.return_value = MagicMock()
+
+    monkeypatch.setattr("vit_feedback.mcp_server.get_client", lambda u, p: mock_client)
+    monkeypatch.setattr(
+        "vit_feedback.mcp_server.extract_dashboard_courses",
+        lambda page: (
+            [CourseItem(course_code="BCSE204L", class_nbr="101", status="Pending", faculty_name="SAKTHIVEL")],
+            [CourseItem(course_code="BCSE204L", status="Pending", table_type="course_outcome")]
+        )
+    )
+    monkeypatch.setattr("vit_feedback.mcp_server.fill_class_wise_feedback", lambda page, it, pol, dry_run: True)
+    monkeypatch.setattr("vit_feedback.mcp_server.fill_course_outcome_feedback", lambda page, it, pol, dry_run: True)
+
+    res = vit_submit_single_course("u", "p", target_id="BCSE204L", dry_run=True)
+    assert res["status"] == "success"
+    assert len(res["processed"]) == 2
+
+def test_vit_logout_releases_session():
+    import vit_feedback.mcp_server as mcp_module
+    mock_client = MagicMock()
+    mcp_module._global_client = mock_client
+    mcp_module._global_user = "test_user"
+
+    res = vit_logout()
+    assert res["status"] == "success"
+    mock_client.close.assert_called_once()
+    assert mcp_module._global_client is None
+    assert mcp_module._global_user is None

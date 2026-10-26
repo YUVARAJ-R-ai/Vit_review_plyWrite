@@ -21,12 +21,12 @@ JS_SCRAPE_SCRIPT = """
             const rows = Array.from(table.querySelectorAll('tbody tr'));
             for (const row of rows) {
                 const cells = Array.from(row.querySelectorAll('td'));
-                if (cells.length >= 14) {
+                if (cells.length >= 6) {
                     const classNbr = cells[1].innerText.trim();
                     const courseCode = cells[2].innerText.trim();
                     const title = cells[3].innerText.trim();
                     const courseType = cells[4].innerText.trim();
-                    const facultyName = cells[13].innerText.trim();
+                    const facultyName = cells.length >= 2 ? cells[cells.length - 2].innerText.trim() : '';
                     
                     const statusCell = cells[cells.length - 1];
                     const statusText = statusCell.innerText.trim();
@@ -112,13 +112,13 @@ def extract_from_html(html: str) -> Tuple[List[CourseItem], List[CourseItem]]:
             rows = re.findall(r'<tr>(.*?)</tr>', tbody, re.DOTALL | re.IGNORECASE)
             for row in rows:
                 cells = re.findall(r'<td[^>]*>(.*?)</td>', row, re.DOTALL | re.IGNORECASE)
-                if len(cells) >= 14:
+                if len(cells) >= 6:
                     clean_cells = [re.sub(r'<[^>]+>', '', c).strip() for c in cells]
                     class_nbr = clean_cells[1]
                     course_code = clean_cells[2]
                     title = clean_cells[3]
                     course_type = clean_cells[4]
-                    faculty_name = clean_cells[13]
+                    faculty_name = clean_cells[-2] if len(clean_cells) >= 2 else ""
                     status_text = clean_cells[-1]
 
                     match = re.search(r"processCourseFeedbackPerception\s*\(\s*['\"]([^'\"]+)['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)", cells[-1])

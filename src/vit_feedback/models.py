@@ -27,26 +27,49 @@ class RatingPolicy(BaseModel):
     custom_suggestions: dict[str, str] = Field(default_factory=dict)
     default_suggestion: str = "The course structure and teaching methodologies were well executed."
 
-    def get_rating_for(self, identifier: str) -> int:
-        clean_id = identifier.strip().upper()
-        for k, v in self.course_overrides.items():
-            if k.strip().upper() in clean_id or clean_id in k.strip().upper():
-                return v
+    def get_rating_for(self, *identifiers: str) -> int:
+        for ident in identifiers:
+            if not ident:
+                continue
+            clean_id = ident.strip().upper()
+            if not clean_id:
+                continue
+            for k, v in self.course_overrides.items():
+                target = k.strip().upper()
+                if not target:
+                    continue
+                if target in clean_id or clean_id in target:
+                    return v
         return self.default_rating
 
-    def get_co_rating(self, identifier: str = "") -> int:
-        if identifier:
-            clean_id = identifier.strip().upper()
+    def get_co_rating(self, *identifiers: str) -> int:
+        for ident in identifiers:
+            if not ident:
+                continue
+            clean_id = ident.strip().upper()
+            if not clean_id:
+                continue
             for k, v in self.course_overrides.items():
-                if k.strip().upper() in clean_id or clean_id in k.strip().upper():
+                target = k.strip().upper()
+                if not target:
+                    continue
+                if target in clean_id or clean_id in target:
                     return v
         return self.course_outcome_rating if self.course_outcome_rating is not None else self.default_rating
 
-    def get_suggestions_for(self, identifier: str) -> str:
-        clean_id = identifier.strip().upper()
-        for k, v in self.custom_suggestions.items():
-            if k.strip().upper() in clean_id or clean_id in k.strip().upper():
-                return v
+    def get_suggestions_for(self, *identifiers: str) -> str:
+        for ident in identifiers:
+            if not ident:
+                continue
+            clean_id = ident.strip().upper()
+            if not clean_id:
+                continue
+            for k, v in self.custom_suggestions.items():
+                target = k.strip().upper()
+                if not target:
+                    continue
+                if target in clean_id or clean_id in target:
+                    return v
         return self.default_suggestion
 
 class FeedbackResult(BaseModel):

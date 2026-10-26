@@ -61,8 +61,10 @@ def test_extract_dashboard_courses():
 
     assert len(class_items) == 2
     assert class_items[0].course_code == "BCSE204L"
+    assert class_items[0].faculty_name == "SAKTHIVEL R"
     assert class_items[0].is_posted is True
     assert class_items[1].course_code == "BCSE204P"
+    assert class_items[1].faculty_name == "SAKTHIVEL R"
     assert class_items[1].is_pending is True
     assert class_items[1].course_id == "CH_BCSE204P_00100"
     assert class_items[1].param_type == "LO"
@@ -71,3 +73,28 @@ def test_extract_dashboard_courses():
     assert co_items[0].course_code == "BCSE204L"
     assert co_items[0].is_pending is True
     assert co_items[0].course_id == "CH_BCSE204L_00100"
+
+def test_extract_dashboard_courses_14_columns():
+    # Table with 14 columns instead of 15 (e.g. Venue column absent)
+    html_14 = """
+    <table>
+        <thead><tr><th>FEEDBACK - CLASS WISE</th></tr></thead>
+        <tbody>
+            <tr>
+                <td>1.</td><td>CH1001</td><td>BCSE101L</td><td>Data Structures</td>
+                <td>Theory Only</td><td>3</td><td>0</td><td>0</td><td>0</td><td>3</td>
+                <td>Regular</td><td>A1</td><td>DR. ALICE</td>
+                <td><button type="button" onclick="processCourseFeedbackPerception('CH_1001', 'TH');">Post</button></td>
+            </tr>
+        </tbody>
+    </table>
+    """
+    mock_page = MagicMock()
+    mock_page.content.return_value = html_14
+    mock_page.evaluate.return_value = None
+
+    class_items, co_items = extract_dashboard_courses(mock_page)
+    assert len(class_items) == 1
+    assert class_items[0].course_code == "BCSE101L"
+    assert class_items[0].faculty_name == "DR. ALICE"
+    assert class_items[0].is_pending is True

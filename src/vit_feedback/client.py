@@ -139,13 +139,16 @@ class VitFeedbackClient:
             return ""
 
     def _dismiss_sweetalert_if_any(self) -> Optional[str]:
-        """Dismiss swal popup if present and return the title text."""
+        """Dismiss swal popup if present and return combined title and body text."""
         page = self.get_page()
         try:
             title = page.evaluate("""() => {
                 const h2 = document.querySelector('.sweet-alert h2');
+                const p = document.querySelector('.sweet-alert p');
                 if (h2 && h2.offsetParent !== null) {
-                    const text = h2.innerText;
+                    const h2Text = h2.innerText ? h2.innerText.trim() : '';
+                    const pText = p && p.innerText ? p.innerText.trim() : '';
+                    const text = (h2Text + (pText ? ' - ' + pText : '')).trim();
                     const okBtn = document.querySelector('.sweet-alert button.confirm');
                     if (okBtn) okBtn.click();
                     return text;
@@ -196,18 +199,29 @@ class VitFeedbackClient:
             alert_text = self._dismiss_sweetalert_if_any()
             if alert_text:
                 logger.warning("SweetAlert dialog appeared: '%s'", alert_text)
-                if "already posted" in alert_text.lower():
+                alert_lower = alert_text.lower()
+
+                # Check credentials rejection first to prevent invalid login loops
+                is_user_error = "user" in alert_lower and any(w in alert_lower for w in ("invalid", "not exist", "does not exist", "wrong"))
+                is_pass_error = "password" in alert_lower and any(w in alert_lower for w in ("invalid", "wrong", "incorrect"))
+                if is_user_error or is_pass_error or "credential" in alert_lower or "authentication failed" in alert_lower:
+                    raise ValueError(f"Portal rejected credentials: {alert_text}")
+
+                if "already posted" in alert_lower:
                     logger.info("All feedback for this semester has already been completed!")
                     self._is_logged_in = True
                     self.all_already_posted = True
                     return True
-                elif "Invalid Captcha" in alert_text or "Enter Captcha" in alert_text or "Not valid" in alert_text:
+                elif "captcha" in alert_lower or "not valid" in alert_lower or "try again" in alert_lower:
                     logger.info("Refreshing captcha for next attempt...")
                     self._refresh_and_wait_new_captcha()
                     time.sleep(0.5)
                     continue
-                elif "Invalid" in alert_text and ("User" in alert_text or "Password" in alert_text):
-                    raise ValueError(f"Portal rejected credentials: {alert_text}")
+                else:
+                    logger.warning("Unknown alert '%s', retrying captcha...", alert_text)
+                    self._refresh_and_wait_new_captcha()
+                    time.sleep(0.5)
+                    continue
 
             # Verify if dashboard loaded
             sign_out = page.query_selector("button:has-text('Sign out')")
