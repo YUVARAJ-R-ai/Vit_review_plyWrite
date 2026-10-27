@@ -37,16 +37,25 @@ It autonomously solves the portal's distorted text captcha, navigates both **Cla
 ### Quick Setup
 
 ```bash
-# Clone and enter directory
+# 1. Clone and enter directory
+git clone https://github.com/<your-username>/Vit_review_plyWrite.git
 cd Vit_review_plyWrite
 
-# Create virtualenv and install dependencies
+# 2. Create virtual environment and install dependencies
 uv venv .venv
 source .venv/bin/activate
 uv pip install -e .
+
+# Or using standard pip:
+# python -m venv .venv
+# source .venv/bin/activate
+# pip install -e .
+
+# 3. Install Playwright browser (if not on NixOS / using system browser)
+playwright install chromium
 ```
 
-On NixOS, simply run:
+On **NixOS**, simply run:
 ```bash
 nix-shell
 ```
@@ -73,6 +82,10 @@ Submits 5 stars for all questions, facility evaluations, and Course Outcomes acr
 ```bash
 python -m vit_feedback -u <VTOP_USERNAME> -p '<VTOP_PASSWORD>'
 ```
+> **Tip:** You can omit `-p` and you will be prompted securely for your password:
+> ```bash
+> python -m vit_feedback -u <VTOP_USERNAME>
+> ```
 
 ### 3. Give 3 Stars Everywhere
 ```bash
@@ -95,21 +108,22 @@ python -m vit_feedback -u <VTOP_USERNAME> -p '<VTOP_PASSWORD>' --no-headless
 
 ## MCP Server Integration (for AI Agents)
 
-To couple this automation with any AI agent, configure the FastMCP server in your agent's MCP settings:
+To couple this automation with any AI agent (Claude Desktop, Cursor, Antigravity, Cline, Windsurf), configure the FastMCP server in your agent's MCP settings:
 
 ```json
 {
   "mcpServers": {
     "vit-feedback": {
-      "command": "/mnt/drive1/projects/Vit_review_plyWrite/.venv/bin/python",
+      "command": "/absolute/path/to/Vit_review_plyWrite/.venv/bin/python",
       "args": ["-m", "vit_feedback.mcp_server"],
       "env": {
-        "PYTHONPATH": "/mnt/drive1/projects/Vit_review_plyWrite/src"
+        "PYTHONPATH": "/absolute/path/to/Vit_review_plyWrite/src"
       }
     }
   }
 }
 ```
+*(Replace `/absolute/path/to/Vit_review_plyWrite` with the actual path to your cloned repository).*
 
 ### Available MCP Tools
 
